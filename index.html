@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>Rclone Conf 转 JSON</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    textarea { width: 100%; height: 300px; }
+    pre { background-color: #f4f4f4; padding: 10px; white-space: pre-wrap; word-break: break-word; }
+    button { margin: 10px 5px; padding: 8px 16px; }
+    #mainContent,
+    #tencentContent { display: none; }
+  </style>
+</head>
+<body>
+
+<h2>将 rclone .conf 转换为 JSON</h2>
+
+<button onclick="showOneDrive()">转换 OneDrive 配置</button>
+<button onclick="showTencent()">转换腾讯对象存储配置</button>
+
+<!-- OneDrive 主要内容 -->
+<div id="mainContent">
+  <label for="input">请输入 rclone 配置：</label><br/>
+  <textarea id="input" placeholder="[my_onedriver]\ntype = onedrive\ntoken = { ... }\ndrive_id = ...\ndrive_type = ..."></textarea><br/>
+
+  <button onclick="convertOneDrive()">转换 OneDrive</button>
+  <button onclick="copyToClipboard()">复制结果</button>
+  <button onclick="downloadJson()">下载 JSON</button>
+
+  <h3>转换结果：</h3>
+  <pre id="output"></pre>
+</div>
+
+<!-- 腾讯 COS 内容 -->
+<div id="tencentContent">
+  <label for="tencentInput">请输入 rclone 腾讯 COS 配置：</label><br/>
+  <textarea id="tencentInput" placeholder="[my_tencentcos]\ntype = s3\nprovider = TencentCOS\naccess_key_id = xxx\nsecret_access_key = xxx\nendpoint = xxx\nstorage_class = STANDARD"></textarea><br/>
+
+  <button onclick="convertTencent()">转换为腾讯 COS JSON</button>
+  <button onclick="copyTencentToClipboard()">复制腾讯结果</button>
+  <button onclick="downloadTencentJson()">下载腾讯 JSON</button>
+
+  <h3>腾讯 COS 转换结果：</h3>
+  <pre id="tencentOutput"></pre>
+</div>
+
+<script>
+  // 显示 OneDrive 区域
+  function showOneDrive() {
+    document.getElementById('mainContent').style.display = 'block';
+    document.getElementById('tencentContent').style.display = 'none';
+  }
+
+  // 显示 Tencent 区域
+  function showTencent() {
+    document.getElementById('mainContent').style.display = 'none';
+    document.getElementById('tencentContent').style.display = 'block';
+  }
+
+  // 解析 rclone 配置
+  function parseRcloneConf(input) {
+    const lines = input.trim().split(/\r?\n/);
+    const result = {};
+    let currentSection = null;
+
+    for (let line of lines) {
+      line = line.trim();
+      if (!line || line.startsWith('#')) continue;
+
+      const sectionMatch = line.match(/^\[(.+?)\]$/);
+      if (sectionMatch) {
+        currentSection = sectionMatch[1];
+        result[currentSection] = {};
+        continue;
+      }
+
+      const keyValueMatch = line.split('=').map(s => s.trim());
+      if (keyValueMatch.length >= 2) {
+        const key = keyValueMatch[0];
+        const value = keyValueMatch.slice(1).join('=').trim();
+
+        try {
+          result[currentSection][key] = JSON.parse(value);
+        } catch (e) {
+          result[currentSection][key] = value;
+        }
+      }
+    }
+
+    return result;
+  }
+
+  // 转换 OneDrive 配置
+  function convertOneDrive() {
+    const input = document.getElementById('input').value;
+    const parsed = parseRcloneConf(input);
+    const firstKey = Object.keys(parsed)[0];
+
+    if (!firstKey) {
+      alert("无法识别配置，请检查输入内容。");
+      return;
+    }
+
+    const data = parsed[firstKey];
+
+    const output = {
+      remote: firstKey,
+      type: data.type || "",
+      client_id: "bbacdef-663e-4451-9710-100000",
+      client_secret: "7Dg8Q~1pUwnqxciT",
+      token: data.token || {},
+      drive_id: data.drive_id || "",
+      drive_type: data.drive_type || ""
+    };
+
+    document.getElementById('output').textContent = JSON.stringify(output, null, 2);
+  }
+
+  // 转换腾讯 COS 配置
+  function convertTencent() {
+    const input = document.getElementById('tencentInput').value;
+    const parsed = parseRcloneConf(input);
+    const firstKey = Object.keys(parsed)[0];
+
+    if (!firstKey) {
+      alert("无法识别腾讯 COS 配置，请检查输入内容。");
+      return;
+    }
+
+    const data = parsed[firstKey];
+
+    const output = {
+      TC_TENCENTCOS: "tencentcos",
+      TC_COS_SECRET_ID: data.access_key_id || "",
+      TC_COS_SECRET_KEY: data.secret_access_key || "",
+      TC_COS_BUCKET: "请修改为你创建的存储桶",
+      TC_ENDPOINT: data.endpoint || "",
+      TC_TYPE: data.type || "",
+      TC_ACL: "private",
+      TC_STORAGE_CLASS: data.storage_class || ""
+    };
+
+    document.getElementById('tencentOutput').textContent = JSON.stringify(output, null, 2);
+  }
+
+  // 复制 OneDrive 结果
+  function copyToClipboard() {
+    const content = document.getElementById('output').textContent;
+    navigator.clipboard.writeText(content).then(() => {
+      alert("已复制到剪贴板！");
+    });
+  }
+
+  // 下载 OneDrive JSON
+  function downloadJson() {
+    const content = document.getElementById('output').textContent;
+    if (!content) {
+      alert("请先转换内容再下载。");
+      return;
+    }
+
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'onedrive_config.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // 复制 Tencent 结果
+  function copyTencentToClipboard() {
+    const content = document.getElementById('tencentOutput').textContent;
+    navigator.clipboard.writeText(content).then(() => {
+      alert("腾讯配置已复制到剪贴板！");
+    });
+  }
+
+  // 下载 Tencent JSON
+  function downloadTencentJson() {
+    const content = document.getElementById('tencentOutput').textContent;
+    if (!content) {
+      alert("请先转换腾讯配置再下载。");
+      return;
+    }
+
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'tencent_cos_config.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+</script>
+
+</body>
+</html>
